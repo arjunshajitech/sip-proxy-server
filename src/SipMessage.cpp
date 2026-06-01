@@ -12,7 +12,6 @@ using namespace std;
 
 std::unordered_map<std::string, std::string> gRegistrations;
 std::unordered_map<std::string, SipMessage*> gActiveCalls;
-std::unordered_map<std::string, SipMessage*> gPendingAnswers;
 
 void handleRegister (SipStack& stack, SipMessage* msg);
 void handleInvite   (SipStack& stack, SipMessage* msg);
@@ -21,7 +20,7 @@ void handleBye      (SipStack& stack, SipMessage* msg);
 void handleResponse (SipStack& stack, SipMessage* msg);
 void handleDefault  (SipStack& stack, SipMessage* msg);
 
-static const char* PROXY_HOST      = "192.168.1.50";
+static const char* PROXY_HOST      = "192.168.2.166";
 static const int   PROXY_PORT      = 5060;
 static const char* PROXY_TRANSPORT = "udp";
 
@@ -167,9 +166,9 @@ void handleInvite(SipStack& stack, SipMessage* msg)
     SipMessage* outgoing = new SipMessage(*msg);
     outgoing->header(h_RequestLine).uri() = Uri(contactUri.c_str());
     applyProxyRoute(outgoing);
-    addProxyVia(outgoing);   // so 200 OK routes back through us
+    addProxyVia(outgoing);  
 
-    std::cout << *outgoing << "\n\n";
+    std::cout << *outgoing << "\n";
     stack.send(*outgoing);
     delete outgoing;
 }
@@ -194,40 +193,13 @@ void handleAck(SipStack& stack, SipMessage* msg)
         return;
     }
 
-    auto answer = gPendingAnswers.find(callId);
-    if (answer != gPendingAnswers.end())
-    {
-        SipMessage* ok200 = answer->second;
-        if (ok200->getContents() != nullptr)
-        {
-            std::cout << "[ACK] Answer SDP (from 200 OK):\n"
-                      << ok200->getContents()->getBodyData() << "\n";
-        }
-        delete ok200;
-        gPendingAnswers.erase(answer);
-    }
-    else
-    {
-        if (msg->exists(h_ContentType)                            &&
-            msg->header(h_ContentType).type()    == "application" &&
-            msg->header(h_ContentType).subType() == "sdp"         &&
-            msg->getContents() != nullptr)
-        {
-            std::cout << "[ACK] SDP in ACK (late offer):\n"
-                      << msg->getContents()->getBodyData() << "\n";
-        }
-        else
-        {
-            std::cout << "[ACK] No SDP\n";
-        }
-    }
-
     SipMessage* outgoing = new SipMessage(*msg);
     outgoing->header(h_RequestLine).uri() = Uri(reg->second.c_str());
     applyProxyRoute(outgoing);
 
-    std::cout << "[ACK] Forward to " << to << " via proxy\n";
-    std::cout << *outgoing << "\n\n";
+    std::cout << "[ACK] Forward to " << to << " via proxy \n";
+    std::cout << "\n"; 
+    std::cout << *outgoing << "\n";
     stack.send(*outgoing);
     delete outgoing;
 }
@@ -273,7 +245,8 @@ void handleBye(SipStack& stack, SipMessage* msg)
         outgoing->header(h_Vias).pop_front();
     addProxyVia(outgoing);
 
-    std::cout << "\n=== FORWARDED BYE to " << targetAor << " ===\n";
+    std::cout << "[BYE] Forwarded to " << targetAor << " from: " << from << "\n";
+    std::cout << "\n"; 
     std::cout << *outgoing << "\n";
     stack.send(*outgoing);
     delete outgoing;
@@ -282,12 +255,6 @@ void handleBye(SipStack& stack, SipMessage* msg)
     stack.send(*ok);
     delete ok;
 
-    auto pendingIt = gPendingAnswers.find(callId);
-    if (pendingIt != gPendingAnswers.end())
-    {
-        delete pendingIt->second;
-        gPendingAnswers.erase(pendingIt);
-    }
     delete it->second;
     gActiveCalls.erase(it);
 }
@@ -306,23 +273,6 @@ void handleResponse(SipStack& stack, SipMessage* msg)
 
     if (status == 200)
     {
-        if (msg->exists(h_ContentType)                            &&
-            msg->header(h_ContentType).type()    == "application" &&
-            msg->header(h_ContentType).subType() == "sdp"         &&
-            msg->getContents() != nullptr)
-        {
-            auto old = gPendingAnswers.find(callId);
-            if (old != gPendingAnswers.end())
-            {
-                delete old->second;
-                gPendingAnswers.erase(old);
-            }
-            gPendingAnswers[callId] = new SipMessage(*msg);
-
-            std::cout << "[RESPONSE] Answer SDP stored:\n"
-                      << msg->getContents()->getBodyData() << "\n";
-        }
-
         auto it = gActiveCalls.find(callId);
         if (it != gActiveCalls.end())
         {
@@ -331,7 +281,9 @@ void handleResponse(SipStack& stack, SipMessage* msg)
             applyProxyRoute(outgoing);
 
             std::cout << "[RESPONSE] Forwarding 200 OK\n";
-            std::cout << *outgoing << "\n\n";
+            std::cout << "\n";
+            std::cout << *outgoing << "\n";
+            
             stack.send(*outgoing);
             delete outgoing;
         }
@@ -345,6 +297,7 @@ void handleResponse(SipStack& stack, SipMessage* msg)
             stripProxyVia(outgoing);
 
             std::cout << "[RESPONSE] Forwarding " << status << "\n";
+            std::cout << "\n"; 
             stack.send(*outgoing);
             delete outgoing;
 
