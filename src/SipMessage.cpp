@@ -20,7 +20,7 @@ void handleBye(SipStack &stack, SipMessage *msg);
 void handleResponse(SipStack &stack, SipMessage *msg);
 void handleDefault(SipStack &stack, SipMessage *msg);
 
-static const char *PROXY_HOST = "192.168.2.166";
+static const char *PROXY_HOST = "192.168.7.135";
 static const int PROXY_PORT = 5060;
 static const char *PROXY_TRANSPORT = "udp";
 
